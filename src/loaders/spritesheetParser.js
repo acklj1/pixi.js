@@ -1,117 +1,58 @@
-var Resource = require('resource-loader').Resource,
-    path = require('path'),
-    core = require('../core'),
-    async = require('async');
+import { Resource } from 'resource-loader';
+import path from 'path';
+import { Spritesheet } from '../core';
 
-var BATCH_SIZE = 1000;
-
-module.exports = function ()
+export default function ()
 {
-    return function (resource, next)
+    return function spritesheetParser(resource, next)
     {
-        var imageResourceName = resource.name + '_image';
+        let resourcePath;
+        const imageResourceName = `${resource.name}_image`;
 
         // skip if no data, its not json, it isn't spritesheet data, or the image resource already exists
-        if (!resource.data || !resource.isJson || !resource.data.frames || this.resources[imageResourceName])
+        if (!resource.data
+            || resource.type !== Resource.TYPE.JSON
+            || !resource.data.frames
+            || this.resources[imageResourceName]
+        )
         {
-            return next();
+            next();
+
+            return;
         }
 
-        var loadOptions = {
+        const loadOptions = {
             crossOrigin: resource.crossOrigin,
             loadType: Resource.LOAD_TYPE.IMAGE,
-            metadata: resource.metadata.imageMetadata
+            metadata: resource.metadata.imageMetadata,
+            parentResource: resource,
         };
 
-        var route = path.dirname(resource.url.replace(this.baseUrl, ''));
+        // Prepend url path unless the resource image is a data url
+        if (resource.isDataUrl)
+        {
+            resourcePath = resource.data.meta.image;
+        }
+        else
+        {
+            resourcePath = `${path.dirname(resource.url.replace(this.baseUrl, ''))}/${resource.data.meta.image}`;
+        }
 
         // load the image for this sheet
-        this.add(imageResourceName, route + '/' + resource.data.meta.image, loadOptions, function (res)
+        this.add(imageResourceName, resourcePath, loadOptions, function onImageLoad(res)
         {
-            resource.textures = {};
+            const spritesheet = new Spritesheet(
+                res.texture.baseTexture,
+                resource.data,
+                resource.url
+            );
 
-            var frames = resource.data.frames;
-            var frameKeys = Object.keys(frames);
-            var resolution = core.utils.getResolutionOfUrl(resource.url);
-            var batchIndex = 0;
-
-            function processFrames(initialFrameIndex, maxFrames)
+            spritesheet.parse(() =>
             {
-                var frameIndex = initialFrameIndex;
-
-                while (frameIndex - initialFrameIndex < maxFrames && frameIndex < frameKeys.length)
-                {
-                    var frame = frames[frameKeys[frameIndex]];
-                    var rect = frame.frame;
-
-                    if (rect)
-                    {
-                        var size = null;
-                        var trim = null;
-
-                        if (frame.rotated)
-                        {
-                            size = new core.Rectangle(rect.x, rect.y, rect.h, rect.w);
-                        }
-                        else
-                        {
-                            size = new core.Rectangle(rect.x, rect.y, rect.w, rect.h);
-                        }
-
-                        //  Check to see if the sprite is trimmed
-                        if (frame.trimmed)
-                        {
-                            trim = new core.Rectangle(
-                                frame.spriteSourceSize.x / resolution,
-                                frame.spriteSourceSize.y / resolution,
-                                frame.sourceSize.w / resolution,
-                                frame.sourceSize.h / resolution
-                            );
-                        }
-
-                        // flip the width and height!
-                        if (frame.rotated)
-                        {
-                            var temp = size.width;
-                            size.width = size.height;
-                            size.height = temp;
-                        }
-
-                        size.x /= resolution;
-                        size.y /= resolution;
-                        size.width /= resolution;
-                        size.height /= resolution;
-
-                        resource.textures[frameKeys[frameIndex]] = new core.Texture(res.texture.baseTexture, size, size.clone(), trim, frame.rotated);
-
-                        // lets also add the frame to pixi's global cache for fromFrame and fromImage functions
-                        core.utils.TextureCache[frameKeys[frameIndex]] = resource.textures[frameKeys[frameIndex]];
-                    }
-                    frameIndex++;
-                }
-            }
-
-            function shouldProcessNextBatch()
-            {
-                return batchIndex * BATCH_SIZE < frameKeys.length;
-            }
-
-            function processNextBatch(done)
-            {
-                processFrames(batchIndex * BATCH_SIZE, BATCH_SIZE);
-                batchIndex++;
-                setTimeout(done, 0);
-            }
-
-            if (frameKeys.length <= BATCH_SIZE)
-            {
-                processFrames(0, BATCH_SIZE);
+                resource.spritesheet = spritesheet;
+                resource.textures = spritesheet.textures;
                 next();
-            }
-            else
-            {
-                async.whilst(shouldProcessNextBatch, processNextBatch, next);
-            }
+            });
         });
     };
-};
+}

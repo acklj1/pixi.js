@@ -1,19 +1,15 @@
 /**
- * @file        Main export of the PIXI loaders library
- * @author      Mat Groves <mat@goodboydigital.com>
- * @copyright   2013-2015 GoodBoyDigital
- * @license     {@link https://github.com/pixijs/pixi.js/blob/master/LICENSE|MIT License}
- */
-
-/**
  * @namespace PIXI.loaders
  */
-module.exports = {
-    Loader:             require('./loader'),
+export { default as Loader } from './loader';
+export { default as bitmapFontParser, parse as parseBitmapFontData } from './bitmapFontParser';
+export { default as spritesheetParser } from './spritesheetParser';
+export { default as textureParser } from './textureParser';
 
-    // parsers
-    bitmapFontParser:   require('./bitmapFontParser'),
-    spritesheetParser:  require('./spritesheetParser'),
-    textureParser:      require('./textureParser'),
-    Resource:           require('resource-loader').Resource
-};
+/**
+ * Reference to **resource-loader**'s Resource class.
+ * See https://github.com/englercj/resource-loader
+ * @class Resource
+ * @memberof PIXI.loaders
+ */
+export { Resource } from 'resource-loader';
